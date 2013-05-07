@@ -1,1 +1,7 @@
-{"shell-version": ["3.8.1"], "uuid": "OpenERP@extensions.undef.ch", "name": "OpenERP", "description": "Connect to OpenERP"}
+{ 
+	"description" : "Connect to OpenERP",
+	"name" : "OpenERP",
+	"settings-schema" : "org.gnome.shell.extensions.openerp",
+	"shell-version" : [ "3.6", "3.8" ],
+	"uuid" : "OpenERP@extensions.undef.ch"
+}

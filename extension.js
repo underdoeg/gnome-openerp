@@ -9,264 +9,261 @@ const Gtk = imports.gi.Gtk;
 const Soup = imports.gi.Soup;
 const Gio = imports.gi.Gio;
 const GObject = imports.gi.GObject
-//const Manager = CoverflowAltTab.imports.manager;
 
-//let text, button;
+const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
+const Convenience = Me.imports.convenience;
 
-/*
-function _hideHello() {
-    Main.uiGroup.remove_actor(text);
-    text = null;
+/*********************************************************************************************************************************************/
+let controller = undefined;
+let _httpSession = new Soup.SessionAsync();
+Soup.Session.prototype.add_feature.call(_httpSession, new Soup.ProxyResolverDefault());
+
+let errorTextPopup;
+function hideError() {
+	Main.uiGroup.remove_actor(errorTextPopup);
+	errorTextPopup = null;
 }
 
-function _showHello() {
-    if (!text) {
-        text = new St.Label({ style_class: 'helloworld-label', text: "Hello, world!" });
-        Main.uiGroup.add_actor(text);
-    }
+function showError(errorText) {
+	if (!errorTextPopup) {
+		errorTextPopup = new St.Label({ style_class: 'openerp-error', text: "OpenERP ERROR: "+errorText });
+		Main.uiGroup.add_actor(errorTextPopup);
+	}
 
-    text.opacity = 255;
+	errorTextPopup.opacity = 255;
 
-    let monitor = Main.layoutManager.primaryMonitor;
+	let monitor = Main.layoutManager.primaryMonitor;
 
-    text.set_position(Math.floor(monitor.width / 2 - text.width / 2),
-                      Math.floor(monitor.height / 2 - text.height / 2));
+	errorTextPopup.set_position(Math.floor(monitor.width / 2 - errorTextPopup.width / 2),
+		Math.floor(monitor.height / 2 - errorTextPopup.height / 2));
 
-    Tweener.addTween(text,
-                     { opacity: 0,
-                       time: 2,
-                       transition: 'easeOutQuad',
-                       onComplete: _hideHello });
+	Tweener.addTween(errorTextPopup,
+		{ opacity: 0,
+			time: 10,
+			transition: 'easeOutQuad',
+			onComplete: hideError });
 }
-*/
+
+/*********************************************************************************************************************************************/
 
 const CategoryMenuItem = new Lang.Class({
-  Name: 'CategoryMenuItem',
-  Extends: PopupMenu.PopupBaseMenuItem,
+	Name: 'CategoryMenuItem',
+	Extends: PopupMenu.PopupBaseMenuItem,
 
-  _init: function() {
-    this.parent();
-    this.addActor(new St.Label({ text: "PROJECT" }));
-  },
+	_init: function() {
+		this.parent();
+		this.addActor(new St.Label({ text: "PROJECT" }));
+	},
 
-  activate: function(event) {
-    this.parent(event);
-  },
+	activate: function(event) {
+		this.parent(event);
+	},
 
-  setActive: function(active, params) {
-    this.parent(active, params);
-  }
+	setActive: function(active, params) {
+		this.parent(active, params);
+	}
 });
 
 /*****************************************************************************************************************************************/
+
 function OpenErpExtension(extensionMeta) {
-  this._init(extensionMeta);
+	this._init(extensionMeta);
 }
 
 OpenErpExtension.prototype = {
-  __proto__: PanelMenu.Button.prototype,
-
-  _init: function(extensionMeta) {
-    PanelMenu.Button.prototype._init.call(this, 0.0);
-
-    this.extensionMeta = extensionMeta;
-    
-    this.panelContainer = new St.BoxLayout();
-    this.actor.add_actor(this.panelContainer);
-
-    this.panelLabel = new St.Label({text: _("OpenERP")});
-    this.panelLabel.show();
-    
-    this.panelContainer.add(this.panelLabel);
-
-    
-    let item = new PopupMenu.PopupMenuItem(_("Stop Tracking"));
-    item.connect('activate', Lang.bind(this, this._onStopTracking));
-    this.menu.addMenuItem(item);
-
-    this.mainBox = new St.BoxLayout({ vertical: false });
-    
-    let section = new PopupMenu.PopupMenuSection();
-    this.menu.addMenuItem(section);
-
-    section.actor.add_actor(this.mainBox);
-
-    this.leftBox = new St.BoxLayout({ vertical: true });
-
-    
-    this.projectsScrollBox = new St.ScrollView({ x_fill: true, y_fill: false,
-     y_align: St.Align.START,
-     style_class: 'vfade' });
-    this.projectsScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
-
-    this.leftBox.add(this.projectsScrollBox, { expand: true,
-     x_fill: true, y_fill: true,
-     y_align: St.Align.START });
-
-    this.projectsBox = new St.BoxLayout({ vertical: true });
-    this.projectsScrollBox.add_actor(this.projectsBox, { expand: true, x_fill: false });
-    
-    this.mainBox.add(this.leftBox);
-
-    for(var i=0;i<100;i++){
-     let categoryMenuItem = new CategoryMenuItem();
-     this.projectsBox.add_actor(categoryMenuItem.actor);
-   }
-
-   this.rightBox = new St.BoxLayout({ vertical: true });
-   this.mainBox.add(this.rightBox);
+	__proto__: PanelMenu.Button.prototype,
 
 
 
+	_init: function(extensionMeta) {
+		PanelMenu.Button.prototype._init.call(this, 0.0);
 
-    //this.mainBox.add(this.projectsScrollBox, { expand: true, x_fill: true, y_fill: true });
+		this.userId = -1;
 
-    /*xmlrpc
-    this.leftBox = new St.BoxLayout({ vertical: true });
+		this.extensionMeta = extensionMeta;
+		
+		this.settings = Convenience.getSettings();
 
-    this.categoriesScrollBox = new St.ScrollView({ x_fill: true, y_fill: false,
-     y_align: St.Align.START,
-     style_class: 'vfade' });
-    this.categoriesScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+		global.log(this.settings.get_string("host"));
 
-    this.leftBox.add(this.categoriesScrollBox, { expand: true,
-     x_fill: true, y_fill: true,
-     y_align: St.Align.START });
-    
-    this.categoriesBox = new St.BoxLayout({ vertical: true });
-    this.categoriesScrollBox.add_actor(this.categoriesBox, { expand: true, x_fill: false });
+		this.panelContainer = new St.BoxLayout();
+		this.actor.add_actor(this.panelContainer);
 
-    this.menu.addMenuItem(this.leftBox);
-    */
+		this.panelLabel = new St.Label({text: _("OpenERP")});
+		this.panelLabel.show();
+		
+		this.panelContainer.add(this.panelLabel);
+
+		
+		let item = new PopupMenu.PopupMenuItem(_("Stop Tracking"));
+		item.connect('activate', Lang.bind(this, this._onStopTracking));
+		this.menu.addMenuItem(item);
+
+		this.mainBox = new St.BoxLayout({ vertical: false });
+		
+		let section = new PopupMenu.PopupMenuSection();
+		this.menu.addMenuItem(section);
+
+		section.actor.add_actor(this.mainBox);
+
+		this.leftBox = new St.BoxLayout({ vertical: true });
+
+		
+		this.projectsScrollBox = new St.ScrollView({ x_fill: true, y_fill: false,
+			y_align: St.Align.START,
+			style_class: 'vfade' });
+		this.projectsScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+
+		this.leftBox.add(this.projectsScrollBox, { expand: true,
+			x_fill: true, y_fill: true,
+			y_align: St.Align.START });
+
+		this.projectsBox = new St.BoxLayout({ vertical: true });
+		this.projectsScrollBox.add_actor(this.projectsBox, { expand: true, x_fill: false });
+		
+		this.mainBox.add(this.leftBox);
+
+		for(var i=0;i<100;i++){
+			//let categoryMenuItem = new CategoryMenuItem();
+			//this.projectsBox.add_actor(categoryMenuItem.actor);
+		}
+
+		this.rightBox = new St.BoxLayout({ vertical: true });
+		this.mainBox.add(this.rightBox);
 
 
-    this.mainBox.style=('width: 440px;');
-    this.mainBox.style+=('height: 500px;');
+		//this.mainBox.add(this.projectsScrollBox, { expand: true, x_fill: true, y_fill: true });
 
-    let rpcCall = Soup.xmlrpc_build_method_call("add", [10, 20], 2);
+		/*xmlrpc
+		this.leftBox = new St.BoxLayout({ vertical: true });
 
-    let _httpSession = new Soup.SessionAsync();
-    Soup.Session.prototype.add_feature.call(_httpSession, new Soup.ProxyResolverDefault());
+		this.categoriesScrollBox = new St.ScrollView({ x_fill: true, y_fill: false,
+		 y_align: St.Align.START,
+		 style_class: 'vfade' });
+		this.categoriesScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
+
+		this.leftBox.add(this.categoriesScrollBox, { expand: true,
+		 x_fill: true, y_fill: true,
+		 y_align: St.Align.START });
+		
+		this.categoriesBox = new St.BoxLayout({ vertical: true });
+		this.categoriesScrollBox.add_actor(this.categoriesBox, { expand: true, x_fill: false });
+
+		this.menu.addMenuItem(this.leftBox);
+		*/
 
 
-    let request = Soup.Message.new('POST', "http://localhost:8000/RPC2");
-    request.set_request("text/xml", Soup.MemoryUse.COPY, rpcCall, rpcCall.length);
+		this.mainBox.style=('width: 500px;');
+		this.mainBox.style+=('height: 500px;');
 
-    _httpSession.queue_message(request, function(_httpSession, message) {
-      global.log(message.status_code);
-      global.log(request.response_body.data);
-    });
+		
+		/*
+		this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+		item = new PopupMenu.PopupMenuItem(_("Tracking Settings"));
+		item.connect('activate', Lang.bind(this, this._onShowSettingsActivate));
+		this.menu.addMenuItem(item);
+		*/
+		//this.timeout = GLib.timeout_add_seconds(0, 60, Lang.bind(this, this.refresh));
+	},
 
-    //this.timeout = GLib.timeout_add_seconds(0, 60, Lang.bind(this, this.refresh));
-  },
+	_display: function() {
+	},
 
-  _display: function() {
-  },
+	_onStopTracking: function(){
+		global.log("STOP THE TRACKER");
+	},
 
-  _onStopTracking: function(){
-    global.log("STOP THE TRACKER");
-  },
+	refresh: function(proxy, sender) {
+		return true;
+	},
 
-  refresh: function(proxy, sender) {
-    global.log("HI THERE");
-    return true;
-  },
+	login: function(callback){
+		let request = Soup.Message.new('POST', this.settings.get_string("host")+"/xmlrpc/common");
+
+		let rpcCall = Soup.xmlrpc_build_method_call("login", [this.settings.get_string("database"), this.settings.get_string("user"), this.settings.get_string("pass")], 3);
+		request.set_request("text/xml", Soup.MemoryUse.COPY, rpcCall, rpcCall.length);
+
+		_httpSession.queue_message(request, function(_httpSession, message) {
+			if(message.status_code != 200)
+				showError("Could not connect to server. URL wrong?");
+
+			let res = Soup.xmlrpc_parse_method_response(request.response_body.data, -1, {});
+			let id = res[1];
+
+			if(id == false)
+				showError("Could not login to server. User or password wrong?");
+			else{
+				controller.extension.userId = id;
+				global.log("OpenERP got user ID: "+controller.extension.userId);
+				callback();
+			}
+		});
+	},
+
+	callApi: function(){
+		if(controller.extension.userId == -1)
+			return;
+
+		let request = Soup.Message.new('POST', controller.extension.settings.get_string("host")+"/xmlrpc/object");
+
+		let sendData = [controller.extension.settings.get_string("database"), controller.extension.userId, controller.extension.settings.get_string("pass"), 'res.partner', 'read', 0];
+		let rpcCall = Soup.xmlrpc_build_method_call("execute", sendData, sendData.length);
+		request.set_request("text/xml", Soup.MemoryUse.COPY, rpcCall, rpcCall.length);
+
+		global.log(sendData);
+
+		_httpSession.queue_message(request, function(_httpSession, message) {
+			if(message.status_code != 200)
+				showError("Could not connect to server. URL wrong?");
+
+			global.log(request.response_body.data);
+
+			//let res = Soup.xmlrpc_parse_method_response(request.response_body.data, -1, {});
+			//global.log(res);
+		});
+	}
 }
 
 function _statusChanged(){
-  global.log("HELLO DU DA");
+	global.log("HELLO DU DA");
 }
 
 function ExtensionController(extensionMeta) {
-  //let dateMenu = Main.panel.statusArea.dateMenu;
+	//let dateMenu = Main.panel.statusArea.dateMenu;
 
-  return {
-    extensionMeta: extensionMeta,
-    extension: null,
-    settings: null,
-
-
-    enable: function() {
-      this.extension = new OpenErpExtension(this.extensionMeta);
-
-      Main.panel.addToStatusArea("openerp", this.extension, 0, "right");
-
-      Main.panel.menuManager.addMenu(this.extension.menu);
+	return {
+		extensionMeta: extensionMeta,
+		extension: null,
+		settings: null,
 
 
-    },
+		enable: function() {
+			controller = this;
 
-    
-  }
+			this.extension = new OpenErpExtension(this.extensionMeta);
+			this.extension.login(this.extension.callApi);
 
+			Main.panel.addToStatusArea("openerp", this.extension, 0, "right");
 
-    /*
-    load_json_async: function(url, fun)
-    {
-      let here = this;
+			Main.panel.menuManager.addMenu(this.extension.menu);
+		},
 
-      let message = Soup.Message.new('GET', url);
+		disable: function(){
+			Main.panel.menuManager.removeMenu(this.extension.menu);
 
-      _httpSession.queue_message(message, function(_httpSession, message)
-      {
-        if(!message.response_body.data)
-        {
-          fun.call(here,0);
-          return 0;
-        }
+			if(this.extension.timeout != undefined)
+				GLib.source_remove(this.extension.timeout);
 
-        try
-        {
-          let jp = JSON.parse(message.response_body.data);
-          fun.call(here, jp);
-        }
-        catch(e)
-        {
-          fun.call(here,0);
-          return 0;
-        }
-      });
-      return 0;
-    },
-    */
-
-  }
-
-  function init(extensionMeta) {
-    return new ExtensionController(extensionMeta);
-  }
-
-/*
-function showPanel(){
+			this.extension.actor.destroy();
+			this.extension.destroy();
+			this.extension = null;
+		}
+		
+	}
 
 }
 
-function init() {
-    button = new St.Bin({ style_class: 'panel-button',
-                          reactive: true,
-                          can_focus: true,
-                          x_fill: true,
-                          y_fill: false,
-                          track_hover: true });
-    let icon = new St.Icon({ icon_name: 'system-run-symbolic',
-                             style_class: 'system-status-icon' });
-
-    let box = new St.BoxLayout();
-    box.set_vertical(true);
-
-    let label = new St.Label({style_class: 'hamster-box-label'});
-    label.set_text(_("What are you doing?"))
-    box.add(label);
-
-    button.set_child(icon);
-    button.connect('button-press-event', showPanel);
+function init(extensionMeta) {
+	return new ExtensionController(extensionMeta);
 }
-
-function enable() {
-    Main.panel._rightBox.insert_child_at_index(button, 0);
-}
-
-function disable() {
-    Main.panel._rightBox.remove_child(button);
-}
-*/

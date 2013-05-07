@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+    <schema id="org.gnome.shell.extensions.openerp" path="/org/gnome/shell/extensions/openerp/">
+        <key name="host" type="s">
+            <default>"<![CDATA[[http://localhost:8069]]]>"</default>
+            <summary>Host</summary>
+            <description>URL of your OpenERP installation</description>
+        </key>
+        <key name="database" type="s">
+            <default>""</default>
+            <summary>Database</summary>
+            <description>Database name</description>
+        </key>
+        <key name="user" type="s">
+            <default>""</default>
+            <summary>Username</summary>
+            <description>user login</description>
+        </key>
+        <key name="pass" type="s">
+            <default>""</default>
+            <summary>Password</summary>
+            <description>user password</description>
+        </key>
+    </schema>
+</schemalist>
