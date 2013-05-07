@@ -1,69 +1,31 @@
-#!/usr/bin/env python
+from SimpleXMLRPCServer import SimpleXMLRPCServer
+from SimpleXMLRPCServer import SimpleXMLRPCRequestHandler
 
-usage = """Usage:
-python example-signal-emitter.py &
-python example-signal-recipient.py
-python example-signal-recipient.py --exit-service
-"""
+# Restrict to a particular path.
+class RequestHandler(SimpleXMLRPCRequestHandler):
+    rpc_paths = ('/RPC2',)
 
-# Copyright (C) 2004-2006 Red Hat Inc. <http://www.redhat.com/>
-# Copyright (C) 2005-2007 Collabora Ltd. <http://www.collabora.co.uk/>
-#
-# Permission is hereby granted, free of charge, to any person
-# obtaining a copy of this software and associated documentation
-# files (the "Software"), to deal in the Software without
-# restriction, including without limitation the rights to use, copy,
-# modify, merge, publish, distribute, sublicense, and/or sell copies
-# of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be
-# included in all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-# HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-# WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
+# Create server
+server = SimpleXMLRPCServer(("localhost", 8000),
+                            requestHandler=RequestHandler)
+server.register_introspection_functions()
 
-import gobject
+# Register pow() function; this will use the value of
+# pow.__name__ as the name, which is just 'pow'.
+server.register_function(pow)
 
-import dbus
-import dbus.service
-import dbus.mainloop.glib
+# Register a function under a different name
+def adder_function(x,y):
+    return x + y
+server.register_function(adder_function, 'add')
 
-class TestObject(dbus.service.Object):
-    def __init__(self, conn, object_path='/com/example/TestService'):
-        dbus.service.Object.__init__(self, conn, object_path)
+# Register an instance; all the methods of the instance are
+# published as XML-RPC methods (in this case, just 'div').
+class MyFuncs:
+    def div(self, x, y):
+        return float(x) // float(y)
 
-    @dbus.service.signal('com.example.TestService')
-    def HelloSignal(self, message):
-        # The signal is emitted when this method exits
-        # You can have code here if you wish
-        pass
+server.register_instance(MyFuncs())
 
-    @dbus.service.method('com.example.TestService')
-    def emitHelloSignal(self):
-        #you emit signals by calling the signal's skeleton method
-        self.HelloSignal('Hello')
-        return 'Signal emitted'
-
-    @dbus.service.method("com.example.TestService",
-                         in_signature='', out_signature='')
-    def Exit(self):
-        loop.quit()
-
-if __name__ == '__main__':
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-
-    session_bus = dbus.SessionBus()
-    name = dbus.service.BusName('com.example.TestService', session_bus)
-    object = TestObject(session_bus)
-
-    loop = gobject.MainLoop()
-    print "Running example signal emitter service."
-    print usage
-    loop.run()
+# Run the server's main loop
+server.serve_forever()

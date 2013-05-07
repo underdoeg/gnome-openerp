@@ -8,15 +8,8 @@ const Lang = imports.lang;
 const Gtk = imports.gi.Gtk;
 const Soup = imports.gi.Soup;
 const Gio = imports.gi.Gio;
+const GObject = imports.gi.GObject
 //const Manager = CoverflowAltTab.imports.manager;
-
-const ApiProxyIface = <interface name="com.example.TestService">
-<signal name="HelloSignal"></signal>
-<signal name="ActivitiesChanged"></signal>
-<signal name="TagsChanged"></signal>
-</interface>;
-
-let ApiProxy = Gio.DBusProxy.makeProxyWrapper(ApiProxyIface);
 
 //let text, button;
 
@@ -128,7 +121,7 @@ OpenErpExtension.prototype = {
 
     //this.mainBox.add(this.projectsScrollBox, { expand: true, x_fill: true, y_fill: true });
 
-    /*
+    /*xmlrpc
     this.leftBox = new St.BoxLayout({ vertical: true });
 
     this.categoriesScrollBox = new St.ScrollView({ x_fill: true, y_fill: false,
@@ -150,8 +143,19 @@ OpenErpExtension.prototype = {
     this.mainBox.style=('width: 440px;');
     this.mainBox.style+=('height: 500px;');
 
-    this._proxy = new ApiProxy(Gio.DBus.session, 'com.example.TestService', '/com/example/TestService');
-    this._proxy.connectSignal('HelloSignal',      Lang.bind(this, this.refresh));
+    let rpcCall = Soup.xmlrpc_build_method_call("add", [10, 20], 2);
+
+    let _httpSession = new Soup.SessionAsync();
+    Soup.Session.prototype.add_feature.call(_httpSession, new Soup.ProxyResolverDefault());
+
+
+    let request = Soup.Message.new('POST', "http://localhost:8000/RPC2");
+    request.set_request("text/xml", Soup.MemoryUse.COPY, rpcCall, rpcCall.length);
+
+    _httpSession.queue_message(request, function(_httpSession, message) {
+      global.log(message.status_code);
+      global.log(request.response_body.data);
+    });
 
     //this.timeout = GLib.timeout_add_seconds(0, 60, Lang.bind(this, this.refresh));
   },
