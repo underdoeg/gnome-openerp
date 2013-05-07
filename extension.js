@@ -1,4 +1,3 @@
-
 const St = imports.gi.St;
 const Main = imports.ui.main;
 const Tweener = imports.ui.tweener;
@@ -7,11 +6,17 @@ const PopupMenu = imports.ui.popupMenu;
 const PanelMenu = imports.ui.panelMenu;
 const Lang = imports.lang;
 const Gtk = imports.gi.Gtk;
-const mimic = imports.mimic
 const Soup = imports.gi.Soup;
+const Gio = imports.gi.Gio;
+//const Manager = CoverflowAltTab.imports.manager;
 
+const ApiProxyIface = <interface name="com.example.TestService">
+<signal name="HelloSignal"></signal>
+<signal name="ActivitiesChanged"></signal>
+<signal name="TagsChanged"></signal>
+</interface>;
 
-
+let ApiProxy = Gio.DBusProxy.makeProxyWrapper(ApiProxyIface);
 
 //let text, button;
 
@@ -118,9 +123,6 @@ OpenErpExtension.prototype = {
    this.rightBox = new St.BoxLayout({ vertical: true });
    this.mainBox.add(this.rightBox);
 
-   var request = new XmlRpcRequest("demos/calc.php", method); 
-   var response = request.send();
-   global.log(response);
 
 
 
@@ -145,28 +147,30 @@ OpenErpExtension.prototype = {
     */
 
 
-    this.mainBox.style=('width: 640px;');
+    this.mainBox.style=('width: 440px;');
     this.mainBox.style+=('height: 500px;');
 
-    this.timeout = GLib.timeout_add_seconds(0, 60, Lang.bind(this, this.refresh));
+    this._proxy = new ApiProxy(Gio.DBus.session, 'com.example.TestService', '/com/example/TestService');
+    this._proxy.connectSignal('HelloSignal',      Lang.bind(this, this.refresh));
+
+    //this.timeout = GLib.timeout_add_seconds(0, 60, Lang.bind(this, this.refresh));
   },
 
   _display: function() {
-    this.menu.open();
-    this.mainBox.style=('width: 640px;');
-    this.mainBox.style+=('height: 500px;');
-    this.mainBox.show();
-    global.log("hello");
   },
 
   _onStopTracking: function(){
     global.log("STOP THE TRACKER");
   },
 
-  refresh: function(){
-    global.log("REFRESH");
+  refresh: function(proxy, sender) {
+    global.log("HI THERE");
     return true;
-  }
+  },
+}
+
+function _statusChanged(){
+  global.log("HELLO DU DA");
 }
 
 function ExtensionController(extensionMeta) {
@@ -177,6 +181,7 @@ function ExtensionController(extensionMeta) {
     extension: null,
     settings: null,
 
+
     enable: function() {
       this.extension = new OpenErpExtension(this.extensionMeta);
 
@@ -184,41 +189,48 @@ function ExtensionController(extensionMeta) {
 
       Main.panel.menuManager.addMenu(this.extension.menu);
 
-    }
-  },
 
-  load_json_async: function(url, fun)
-  {
-    let here = this;
+    },
 
-    let message = Soup.Message.new('GET', url);
+    
+  }
 
-    _httpSession.queue_message(message, function(_httpSession, message)
+
+    /*
+    load_json_async: function(url, fun)
     {
-      if(!message.response_body.data)
-      {
-        fun.call(here,0);
-        return 0;
-      }
+      let here = this;
 
-      try
-      {
-        let jp = JSON.parse(message.response_body.data);
-        fun.call(here, jp);
-      }
-      catch(e)
-      {
-        fun.call(here,0);
-        return 0;
-      }
-    });
-    return 0;
-  },
-}
+      let message = Soup.Message.new('GET', url);
 
-function init(extensionMeta) {
-  return new ExtensionController(extensionMeta);
-}
+      _httpSession.queue_message(message, function(_httpSession, message)
+      {
+        if(!message.response_body.data)
+        {
+          fun.call(here,0);
+          return 0;
+        }
+
+        try
+        {
+          let jp = JSON.parse(message.response_body.data);
+          fun.call(here, jp);
+        }
+        catch(e)
+        {
+          fun.call(here,0);
+          return 0;
+        }
+      });
+      return 0;
+    },
+    */
+
+  }
+
+  function init(extensionMeta) {
+    return new ExtensionController(extensionMeta);
+  }
 
 /*
 function showPanel(){
