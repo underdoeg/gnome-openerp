@@ -1,20 +1,51 @@
-const St = imports.gi.St;
-const Main = imports.ui.main;
-const Tweener = imports.ui.tweener;
-const GLib = imports.gi.GLib;
-const PopupMenu = imports.ui.popupMenu;
-const PanelMenu = imports.ui.panelMenu;
+const Clutter = imports.gi.Clutter;
+const Gettext = imports.gettext;
 const Lang = imports.lang;
-const Gtk = imports.gi.Gtk;
-const Soup = imports.gi.Soup;
-const Gio = imports.gi.Gio;
-const GObject = imports.gi.GObject
+const Main = imports.ui.main;
+const PanelMenu = imports.ui.panelMenu;
+const Pango = imports.gi.Pango;
+const PopupMenu = imports.ui.popupMenu;
+const St = imports.gi.St;
 
-const ExtensionUtils = imports.misc.extensionUtils;
-const Me = ExtensionUtils.getCurrentExtension();
-const Convenience = Me.imports.convenience;
+const OpenErpStatusIcon = new Lang.Class({
+    Name: 'OpenErpStatusIcon',
+    Extends: St.BoxLayout,
+
+    _init: function() {
+        this.parent({ style_class: 'panel-status-menu-box' });
+
+        /*
+        this.add_child(new St.Icon({
+            icon_name: 'edit-paste-symbolic',
+            style_class: 'system-status-icon'
+        }));
+		*/
+
+        this.add_child(new St.Label({
+            text: 'openerp',
+            y_expand: true,
+            y_align: Clutter.ActorAlign.CENTER
+        }));
+    }
+});
+
+const OpenErpStateSwitch = new Lang.Class({
+    Name: 'OpenErpStateSwitch',
+    Extends: PopupMenu.PopupSwitchMenuItem,
+
+    _init: function(client) {
+        this.parent(_("track"), false);
+
+        this._fromDaemon = false;
+
+        this.connect('toggled', Lang.bind(this, function() {
+            
+        }));
+    }
+});
 
 /*********************************************************************************************************************************************/
+/*
 let controller = undefined;
 let _httpSession = new Soup.SessionAsync();
 Soup.Session.prototype.add_feature.call(_httpSession, new Soup.ProxyResolverDefault());
@@ -44,9 +75,9 @@ function showError(errorText) {
 			transition: 'easeOutQuad',
 			onComplete: hideError });
 }
-
+*/
 /*********************************************************************************************************************************************/
-
+/*
 const CategoryMenuItem = new Lang.Class({
 	Name: 'CategoryMenuItem',
 	Extends: PopupMenu.PopupBaseMenuItem,
@@ -64,206 +95,109 @@ const CategoryMenuItem = new Lang.Class({
 		this.parent(active, params);
 	}
 });
+*/
+
+const TaskMenuItem = new Lang.Class({
+    Name: 'TaskMenuItem',
+    Extends: PopupMenu.PopupMenuItem,
+
+    _init: function(client, index) {
+        this.parent("");
+
+        let text = this.label.clutter_text;
+        text.max_length = 60;
+        text.ellipsize = Pango.EllipsizeMode.END;
+        this.label.set_text("subitem");
+
+
+        this.actor.connect('key-press-event', function(actor, event) {
+            let symbol = event.get_key_symbol();
+            if (symbol == Clutter.KEY_BackSpace || symbol == Clutter.KEY_Delete) {
+                //client.delete(index, null);
+                return true;
+            }
+            return false;
+        });
+
+        //this.actor.add(new GPasteDeleteMenuItemPart(client, index), { expand: true, x_align: St.Align.END });
+    },
+
+    setText: function(text) {
+        this.label.set_text(text);
+        this.actor.show();
+    }
+});
+
+
+const ProjectMenuItem = new Lang.Class({
+    Name: 'ProjectMenuItem',
+    Extends: PopupMenu.PopupSubMenuMenuItem,
+
+    _init: function(client, index) {
+        this.parent("");
+
+        let text = this.label.clutter_text;
+        text.max_length = 60;
+        text.ellipsize = Pango.EllipsizeMode.END;
+        this.label.set_text("PROJECT");
+
+        this.actor.connect('key-press-event', function(actor, event) {
+            let symbol = event.get_key_symbol();
+            if (symbol == Clutter.KEY_BackSpace || symbol == Clutter.KEY_Delete) {
+                //client.delete(index, null);
+                return true;
+            }
+            return false;
+        });
+
+        //this.actor.add(new GPasteDeleteMenuItemPart(client, index), { expand: true, x_align: St.Align.END });
+    },
+
+    setText: function(text) {
+        this.label.set_text(text);
+        this.actor.show();
+    }
+});
+
 
 /*****************************************************************************************************************************************/
 
-function OpenErpExtension(extensionMeta) {
-	this._init(extensionMeta);
-}
+const OpenErpIndicator = new Lang.Class({
+    Name: 'OpenErpIndicator',
+    Extends: PanelMenu.Button,
 
-OpenErpExtension.prototype = {
-	__proto__: PanelMenu.Button.prototype,
+    _init: function() {
+        this.parent(0.0, "OpenERP");
 
+        this.actor.add_child(new OpenErpStatusIcon());
 
+		this.menu.addMenuItem(new OpenErpStateSwitch(null));
 
-	_init: function(extensionMeta) {
-		PanelMenu.Button.prototype._init.call(this, 0.0);
-
-		this.userId = -1;
-
-		this.extensionMeta = extensionMeta;
-		
-		this.settings = Convenience.getSettings();
-
-		global.log(this.settings.get_string("host"));
-
-		this.panelContainer = new St.BoxLayout();
-		this.actor.add_actor(this.panelContainer);
-
-		this.panelLabel = new St.Label({text: _("OpenERP")});
-		this.panelLabel.show();
-		
-		this.panelContainer.add(this.panelLabel);
-
-		
-		let item = new PopupMenu.PopupMenuItem(_("Stop Tracking"));
-		item.connect('activate', Lang.bind(this, this._onStopTracking));
-		this.menu.addMenuItem(item);
-
-		this.mainBox = new St.BoxLayout({ vertical: false });
-		
-		let section = new PopupMenu.PopupMenuSection();
-		this.menu.addMenuItem(section);
-
-		section.actor.add_actor(this.mainBox);
-
-		this.leftBox = new St.BoxLayout({ vertical: true });
-
-		
-		this.projectsScrollBox = new St.ScrollView({ x_fill: true, y_fill: false,
-			y_align: St.Align.START,
-			style_class: 'vfade' });
-		this.projectsScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
-
-		this.leftBox.add(this.projectsScrollBox, { expand: true,
-			x_fill: true, y_fill: true,
-			y_align: St.Align.START });
-
-		this.projectsBox = new St.BoxLayout({ vertical: true });
-		this.projectsScrollBox.add_actor(this.projectsBox, { expand: true, x_fill: false });
-		
-		this.mainBox.add(this.leftBox);
-
-		for(var i=0;i<100;i++){
-			//let categoryMenuItem = new CategoryMenuItem();
-			//this.projectsBox.add_actor(categoryMenuItem.actor);
-		}
-
-		this.rightBox = new St.BoxLayout({ vertical: true });
-		this.mainBox.add(this.rightBox);
-
-
-		//this.mainBox.add(this.projectsScrollBox, { expand: true, x_fill: true, y_fill: true });
-
-		/*xmlrpc
-		this.leftBox = new St.BoxLayout({ vertical: true });
-
-		this.categoriesScrollBox = new St.ScrollView({ x_fill: true, y_fill: false,
-		 y_align: St.Align.START,
-		 style_class: 'vfade' });
-		this.categoriesScrollBox.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC);
-
-		this.leftBox.add(this.categoriesScrollBox, { expand: true,
-		 x_fill: true, y_fill: true,
-		 y_align: St.Align.START });
-		
-		this.categoriesBox = new St.BoxLayout({ vertical: true });
-		this.categoriesScrollBox.add_actor(this.categoriesBox, { expand: true, x_fill: false });
-
-		this.menu.addMenuItem(this.leftBox);
-		*/
-
-
-		this.mainBox.style=('width: 500px;');
-		this.mainBox.style+=('height: 500px;');
-
-		
-		/*
 		this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-		item = new PopupMenu.PopupMenuItem(_("Tracking Settings"));
-		item.connect('activate', Lang.bind(this, this._onShowSettingsActivate));
-		this.menu.addMenuItem(item);
-		*/
-		//this.timeout = GLib.timeout_add_seconds(0, 60, Lang.bind(this, this.refresh));
-	},
 
-	_display: function() {
-	},
-
-	_onStopTracking: function(){
-		global.log("STOP THE TRACKER");
-	},
-
-	refresh: function(proxy, sender) {
-		return true;
-	},
-
-	login: function(callback){
-		let request = Soup.Message.new('POST', this.settings.get_string("host")+"/xmlrpc/common");
-
-		let rpcCall = Soup.xmlrpc_build_method_call("login", [this.settings.get_string("database"), this.settings.get_string("user"), this.settings.get_string("pass")], 3);
-		request.set_request("text/xml", Soup.MemoryUse.COPY, rpcCall, rpcCall.length);
-
-		_httpSession.queue_message(request, function(_httpSession, message) {
-			if(message.status_code != 200)
-				showError("Could not connect to server. URL wrong?");
-
-			let res = Soup.xmlrpc_parse_method_response(request.response_body.data, -1, {});
-			let id = res[1];
-
-			if(id == false)
-				showError("Could not login to server. User or password wrong?");
-			else{
-				controller.extension.userId = id;
-				global.log("OpenERP got user ID: "+controller.extension.userId);
-				callback();
-			}
-		});
-	},
-
-	callApi: function(){
-		if(controller.extension.userId == -1)
-			return;
-
-		let request = Soup.Message.new('POST', controller.extension.settings.get_string("host")+"/xmlrpc/object");
-
-		let sendData = [controller.extension.settings.get_string("database"), controller.extension.userId, controller.extension.settings.get_string("pass"), 'res.partner', 'read', 0];
-		let rpcCall = Soup.xmlrpc_build_method_call("execute", sendData, sendData.length);
-		request.set_request("text/xml", Soup.MemoryUse.COPY, rpcCall, rpcCall.length);
-
-		global.log(sendData);
-
-		_httpSession.queue_message(request, function(_httpSession, message) {
-			if(message.status_code != 200)
-				showError("Could not connect to server. URL wrong?");
-
-			global.log(request.response_body.data);
-
-			//let res = Soup.xmlrpc_parse_method_response(request.response_body.data, -1, {});
-			//global.log(res);
-		});
-	}
-}
-
-function _statusChanged(){
-	global.log("HELLO DU DA");
-}
-
-function ExtensionController(extensionMeta) {
-	//let dateMenu = Main.panel.statusArea.dateMenu;
-
-	return {
-		extensionMeta: extensionMeta,
-		extension: null,
-		settings: null,
-
-
-		enable: function() {
-			controller = this;
-
-			this.extension = new OpenErpExtension(this.extensionMeta);
-			this.extension.login(this.extension.callApi);
-
-			Main.panel.addToStatusArea("openerp", this.extension, 0, "right");
-
-			Main.panel.menuManager.addMenu(this.extension.menu);
-		},
-
-		disable: function(){
-			Main.panel.menuManager.removeMenu(this.extension.menu);
-
-			if(this.extension.timeout != undefined)
-				GLib.source_remove(this.extension.timeout);
-
-			this.extension.actor.destroy();
-			this.extension.destroy();
-			this.extension = null;
+		for(let i=0;i<10;i++){
+			this.menu.addMenuItem(new ProjectMenuItem());
 		}
-		
-	}
+    },
 
+    shutdown: function() {
+        this._onStateChanged (false);
+        this.destroy();
+    },
+
+    _onStateChanged: function (state) {
+        this._client.on_extension_state_changed(state, null);
+    }
+});
+
+function init(extension) {
+    //Gettext.bindtextdomain('openerp', extension.metadata.localedir);
 }
 
-function init(extensionMeta) {
-	return new ExtensionController(extensionMeta);
+function enable() {
+    Main.panel.addToStatusArea('openerp', new OpenErpIndicator());
+}
+
+function disable() {
+    Main.panel.statusArea.openerp.shutdown();
 }

@@ -2,6 +2,6 @@
 	"description" : "Connect to OpenERP",
 	"name" : "OpenERP",
 	"settings-schema" : "org.gnome.shell.extensions.openerp",
-	"shell-version" : [ "3.6", "3.8" ],
+	"shell-version" : [ "3.10" ],
 	"uuid" : "OpenERP@extensions.undef.ch"
 }
